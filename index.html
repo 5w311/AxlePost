@@ -1,0 +1,765 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>AxlePost</title>
+<meta name="theme-color" content="#101215">
+<meta name="color-scheme" content="dark">
+<meta name="description" content="Scale ticket in, slide answer out. Axle weights, tandem slide, and kingpin limits. Works offline.">
+<link rel="manifest" href="./manifest.webmanifest">
+<link rel="apple-touch-icon" href="./apple-touch-icon.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="AxlePost">
+<style>
+/* Scale-ticket yellow on asphalt. Color carries meaning and nothing else:
+     GREEN  legal, with room      AMBER  legal, within 500 lb
+     RED    over                  YELLOW the app's own marks — the kingpin,
+                                         dimensions, the slide arrow
+   Design source of truth: design/prototype.html. */
+:root{
+  --asphalt:#101215; --card:#181b20; --edge:#262b33; --well:#0c0e10;
+  --ticket:#f2c230; --legal:#3dcc7e; --over:#f04b4b; --tight:#f0a02e;
+  --ink:#eaecef; --mut:#a3abb6; --dim:#5c636e;
+  --cond:"Avenir Next Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;
+  --text:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%;background:var(--asphalt)}
+body{background:var(--asphalt);color:var(--ink);font-family:var(--cond);font-size:16px;
+  max-width:440px;margin:0 auto;
+  padding:env(safe-area-inset-top) max(16px,env(safe-area-inset-right)) calc(40px + env(safe-area-inset-bottom)) max(16px,env(safe-area-inset-left))}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+:focus-visible{outline:2px solid var(--ticket);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+header{display:flex;align-items:baseline;justify-content:space-between;padding:18px 2px 10px}
+.mark{font-size:25px;font-weight:700;letter-spacing:2.5px}
+.mark b{color:var(--ticket);font-weight:700}
+.ver{font-family:var(--mono);font-size:12px;color:var(--mut)}
+.hazard{height:5px;border-radius:3px;margin-bottom:14px;opacity:.55;
+  background:repeating-linear-gradient(45deg,var(--ticket) 0 8px,transparent 8px 16px)}
+
+.card{background:var(--card);border:1px solid var(--edge);border-radius:14px;padding:14px;margin-bottom:12px}
+.eyebrow{font-size:12px;letter-spacing:2px;color:var(--mut);margin-bottom:10px;font-weight:600;
+  display:flex;justify-content:space-between;align-items:center}
+.note{font-family:var(--text);font-size:13px;line-height:1.45;color:var(--mut)}
+.hidden{display:none!important}
+
+/* ---- ticket ---- */
+.wrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.wrow label{width:74px;font-size:14px;letter-spacing:1.5px;color:var(--mut);font-weight:600}
+.wrow input{flex:1;min-width:0;background:var(--well);border:1px solid var(--edge);border-radius:10px;
+  padding:10px 12px;font-family:var(--mono);font-size:21px;text-align:right;font-variant-numeric:tabular-nums}
+.wrow .u{font-size:12px;color:var(--mut);width:20px}
+.sum{font-family:var(--mono);font-size:13px;text-align:right;min-height:18px;margin-top:2px}
+.sum.ok{color:var(--legal)} .sum.warn{color:var(--tight)}
+.textbtn{background:none;border:none;color:var(--mut);font-size:12px;letter-spacing:1.5px;font-weight:600;padding:4px 2px}
+.banner{font-family:var(--text);font-size:13.5px;line-height:1.45;color:var(--ink);
+  border-left:3px solid var(--ticket);padding:2px 0 2px 10px;margin-bottom:12px}
+
+/* ---- rig ---- */
+.rig{padding:8px 6px 4px}
+svg{width:100%;height:auto;display:block}
+.rig-line{stroke:#464d58;stroke-width:2;fill:none}
+.rig-fill{fill:#20252c;stroke:#464d58;stroke-width:2}
+.wheel{fill:#14171b;stroke:#525a66;stroke-width:2}
+.wlabel{font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+.dimline{stroke:var(--ticket);stroke-width:1.25;opacity:.85}
+.dimtxt{font-family:var(--mono);font-size:10.5px;fill:var(--ticket)}
+.slidearrow{stroke:var(--ticket);stroke-width:2;fill:none}
+.slidetxt{font-family:var(--cond);font-size:11px;letter-spacing:1px;fill:var(--ticket)}
+/* The pins animate when they move; the target ring only fades, so it never
+   sweeps in from wherever it last was. */
+#tandems{transition:transform .5s ease}
+#ghostT{transition:opacity .3s;opacity:0} #ghostT.show{opacity:.55}
+
+/* ---- states ---- */
+.chips{display:flex;gap:8px;flex-wrap:wrap}
+.chip{background:var(--well);border:1px solid var(--edge);border-radius:20px;padding:8px 13px;
+  font-size:14px;letter-spacing:.5px;color:var(--mut);text-align:left}
+.chip small{display:block;font-family:var(--mono);font-size:11.5px;color:var(--mut);letter-spacing:0}
+.chip[aria-pressed="true"]{border-color:var(--ticket);color:var(--ticket)}
+.chip[aria-pressed="true"] small{color:var(--ticket);opacity:.8}
+
+/* ---- verdict ---- */
+.brow{display:grid;grid-template-columns:62px 1fr 96px;gap:8px;align-items:center;margin-bottom:9px}
+.brow .n{font-size:13px;letter-spacing:1.5px;color:var(--mut);font-weight:600}
+.track{height:10px;background:var(--well);border-radius:5px;position:relative;overflow:hidden}
+.track .tick{position:absolute;left:86%;top:-1px;bottom:-1px;width:2px;background:#3d4450}
+.fill{height:100%;border-radius:5px;transition:width .4s ease;background:var(--legal)}
+.fill.tight{background:var(--tight)} .fill.over{background:var(--over)}
+.brow .m{font-family:var(--mono);font-size:12px;text-align:right;font-variant-numeric:tabular-nums;color:var(--mut)}
+.brow .m.over{color:var(--over)} .brow .m.tight{color:var(--tight)}
+.pill{margin-top:12px;border-radius:10px;padding:12px;text-align:center;font-size:18px;font-weight:700;letter-spacing:2px}
+.pill.legal{background:rgba(61,204,126,.12);color:var(--legal);border:1px solid rgba(61,204,126,.4)}
+.pill.fix{background:rgba(240,160,46,.12);color:var(--tight);border:1px solid rgba(240,160,46,.4)}
+.pill.bad{background:rgba(240,75,75,.12);color:var(--over);border:1px solid rgba(240,75,75,.4)}
+.pill.idle{background:none;color:var(--mut);border:1px dashed var(--edge)}
+.checked{font-family:var(--mono);font-size:11.5px;color:var(--mut);margin-top:10px;line-height:1.5}
+
+/* ---- fix ---- */
+.directive{font-size:22px;font-weight:700;letter-spacing:1.5px;margin-bottom:3px}
+.directive .arr{color:var(--ticket)}
+.rate{font-family:var(--mono);font-size:12px;color:var(--mut);margin-bottom:12px;line-height:1.5}
+.ba{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:15px;font-variant-numeric:tabular-nums;margin-bottom:10px}
+.ba td{padding:6px 0;border-bottom:1px solid var(--edge)}
+.ba td:first-child{font-family:var(--cond);font-size:13px;letter-spacing:1.5px;color:var(--mut)}
+.ba td:nth-child(2){text-align:right;color:var(--mut)}
+.ba td:nth-child(3){text-align:center;color:var(--dim);width:30px}
+.ba td:nth-child(4){text-align:right}
+.good{color:var(--legal)} .bad{color:var(--over)}
+.kpline{font-family:var(--mono);font-size:12.5px;color:var(--mut);margin-bottom:6px}
+.rail{display:flex;gap:5px;align-items:center;margin:10px 0 4px;flex-wrap:wrap}
+.dot{width:14px;height:14px;border-radius:50%;background:var(--well);border:1.5px solid var(--dim)}
+.dot.ok{border-color:var(--legal)}
+.dot.no{border-color:#5a3036;background:#241a1c}
+.dot.cur{border-color:var(--ticket);box-shadow:0 0 0 2px rgba(242,194,48,.28)}
+.dot.tgt{background:var(--legal);border-color:var(--legal)}
+.raillegend{font-size:12px;color:var(--mut);letter-spacing:.5px}
+.prose{font-family:var(--text);font-size:15px;line-height:1.5;color:var(--ink)}
+.prose + .prose{margin-top:8px}
+.prose b{color:var(--ticket);font-weight:600}
+.predicted{font-family:var(--text);font-size:13px;color:var(--tight);margin-top:10px}
+.solidbtn{width:100%;background:var(--ticket);color:var(--asphalt);border:none;border-radius:10px;
+  padding:12px;font-weight:700;letter-spacing:1.5px;font-size:15px;margin-top:12px}
+
+/* ---- setup ---- */
+details{background:var(--card);border:1px solid var(--edge);border-radius:14px;margin-bottom:12px;overflow:hidden}
+summary{padding:14px;font-size:12px;letter-spacing:2px;color:var(--mut);font-weight:600;cursor:pointer;
+  list-style:none;display:flex;justify-content:space-between;align-items:center;gap:8px}
+summary::-webkit-details-marker{display:none}
+summary .car{color:var(--dim);transition:transform .2s;margin-left:auto}
+details[open] summary .car{transform:rotate(90deg)}
+.dbody{padding:0 14px 14px}
+.srow{display:flex;align-items:center;gap:10px;margin-bottom:9px}
+.srow label{flex:1;font-family:var(--text);font-size:14px;color:var(--ink);line-height:1.25}
+.srow label small{display:block;font-size:12px;color:var(--mut)}
+/* 16px minimum: iOS Safari zooms the whole page into any smaller focused input. */
+.srow input,.srow select{width:108px;background:var(--well);border:1px solid var(--edge);border-radius:8px;
+  padding:8px 10px;font-family:var(--mono);font-size:16px;text-align:right;font-variant-numeric:tabular-nums}
+.srow input.invalid{border-color:var(--over)}
+.srow .conv{font-family:var(--mono);font-size:12px;color:var(--mut);width:46px;text-align:right}
+.badge{font-size:10px;letter-spacing:1px;color:var(--legal);border:1px solid var(--legal);border-radius:3px;padding:1px 5px}
+.calout{font-family:var(--mono);font-size:14px;margin:10px 0 2px;line-height:1.5}
+.calout .val{color:var(--ticket);font-size:18px}
+.calout .err{color:var(--tight);font-family:var(--text);font-size:13.5px}
+
+footer{font-family:var(--text);font-size:12px;color:var(--mut);text-align:center;line-height:1.6;padding-top:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark">AXLE<b>POST</b></div>
+  <div class="ver" id="ver"></div>
+</header>
+<div class="hazard"></div>
+
+<!-- SCALE TICKET -->
+<section class="card" aria-labelledby="h-ticket">
+  <div class="eyebrow"><span id="h-ticket">SCALE TICKET</span><button class="textbtn" id="clearbtn" type="button">CLEAR</button></div>
+  <div class="banner hidden" id="reweighBanner"></div>
+  <div class="wrow"><label for="w_steer">STEER</label><input id="w_steer" inputmode="numeric" autocomplete="off" enterkeyhint="next"><span class="u">LB</span></div>
+  <div class="wrow"><label for="w_drive">DRIVE</label><input id="w_drive" inputmode="numeric" autocomplete="off" enterkeyhint="next"><span class="u">LB</span></div>
+  <div class="wrow"><label for="w_tandem">TRAILER</label><input id="w_tandem" inputmode="numeric" autocomplete="off" enterkeyhint="next"><span class="u">LB</span></div>
+  <div class="wrow"><label for="w_gross">GROSS</label><input id="w_gross" inputmode="numeric" autocomplete="off" enterkeyhint="done"><span class="u">LB</span></div>
+  <div class="sum" id="sumchk" aria-live="polite"></div>
+</section>
+
+<!-- RIG -->
+<section class="card rig" aria-label="Rig diagram">
+  <svg viewBox="0 0 360 140" role="img" aria-labelledby="rigTitle">
+    <title id="rigTitle">Tractor and trailer, with each axle group's weight and the kingpin to tandem distance</title>
+    <line x1="6" y1="104" x2="354" y2="104" class="rig-line"/>
+    <rect x="70" y="26" width="274" height="52" rx="3" class="rig-fill"/>
+    <line x1="150" y1="78" x2="150" y2="96" class="rig-line"/>
+    <path d="M14 96 V56 h20 l6 -18 h24 v58" class="rig-fill"/>
+    <line x1="88" y1="78" x2="88" y2="92" stroke="#f2c230" stroke-width="2.5"/>
+    <circle cx="34" cy="96" r="9" class="wheel"/>
+    <circle cx="82" cy="96" r="9" class="wheel"/>
+    <circle cx="103" cy="96" r="9" class="wheel"/>
+    <g id="tandems">
+      <circle cx="-10.5" cy="96" r="9" class="wheel"/>
+      <circle cx="10.5" cy="96" r="9" class="wheel"/>
+    </g>
+    <g id="ghostT">
+      <circle cx="-10.5" cy="96" r="9" fill="none" stroke="#f2c230" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <circle cx="10.5" cy="96" r="9" fill="none" stroke="#f2c230" stroke-width="1.5" stroke-dasharray="3 3"/>
+    </g>
+    <g id="slideArrow" style="opacity:0">
+      <line id="sa_l" x1="0" y1="88" x2="0" y2="88" class="slidearrow"/>
+      <path id="sa_h" d="" class="slidearrow"/>
+      <text id="sa_t" x="0" y="81" text-anchor="middle" class="slidetxt"></text>
+    </g>
+    <text id="l_steer" x="34" y="122" text-anchor="middle" class="wlabel"></text>
+    <text id="l_drive" x="92" y="122" text-anchor="middle" class="wlabel"></text>
+    <text id="l_tandem" x="270" y="122" text-anchor="middle" class="wlabel"></text>
+    <line id="dim" x1="88" y1="134" x2="270" y2="134" class="dimline"/>
+    <text id="dimt" x="180" y="131" text-anchor="middle" class="dimtxt"></text>
+  </svg>
+</section>
+
+<!-- STATES -->
+<section class="card" aria-labelledby="h-states">
+  <div class="eyebrow"><span id="h-states">KINGPIN LAW &middot; STATES ON THIS LOAD</span></div>
+  <div class="chips" id="stateChips"></div>
+  <p class="note" style="margin-top:9px">Tap every state this load runs in; the strictest rule wins. Nothing tapped means no kingpin check. These rules only cover trailers over 48&prime;. Other states aren't loaded yet.</p>
+</section>
+
+<!-- VERDICT -->
+<section class="card" aria-labelledby="h-verdict">
+  <div class="eyebrow"><span id="h-verdict">VERDICT</span></div>
+  <div id="bars"></div>
+  <div class="pill idle" id="pill" role="status" aria-live="polite">ENTER TICKET WEIGHTS</div>
+  <div class="checked" id="checked"></div>
+</section>
+
+<!-- FIX -->
+<section class="card hidden" id="fixcard" aria-labelledby="fixeyebrow">
+  <div class="eyebrow"><span id="fixeyebrow">THE FIX</span></div>
+  <div id="fixbody"></div>
+</section>
+
+<!-- RIG SETUP -->
+<details id="setupD">
+  <summary>RIG SETUP <span id="calBadge"></span><span class="car" aria-hidden="true">&#9656;</span></summary>
+  <div class="dbody">
+    <div class="srow"><label for="s_hole">Pins in hole<small>Count from the front of the rail</small></label><input id="s_hole" inputmode="numeric"></div>
+    <div class="srow"><label for="s_holes">Holes on the rail</label><input id="s_holes" inputmode="numeric"></div>
+    <div class="srow"><label for="s_spacing">Hole spacing</label>
+      <select id="s_spacing"><option value="6">6 in</option><option value="4">4 in</option></select></div>
+    <div class="srow"><label for="s_length">Trailer length</label>
+      <select id="s_length"><option value="53">53 ft</option><option value="48">48 ft or less</option></select></div>
+    <div class="srow"><label for="s_lever">Kingpin to tandem center<small>Right now, in inches</small></label><input id="s_lever" inputmode="numeric"><span class="conv" id="leverConv"></span></div>
+    <div class="srow"><label for="s_spread">Tandem spread<small>Axle center to axle center, inches</small></label><input id="s_spread" inputmode="numeric"></div>
+    <div class="srow"><label for="s_share">Kingpin weight to drives<small>Percent; the rest goes to steers</small></label><input id="s_share" inputmode="numeric"><span class="conv">%</span></div>
+    <div class="srow"><label for="s_steer">Steer limit<small>Your front axle rating, from the door sticker</small></label><input id="s_steer" inputmode="numeric"><span class="conv">lb</span></div>
+    <p class="note">Change the hole after you slide and the kingpin distance moves with it. The kingpin distance is the one number worth calibrating (see below); you can read the rest off the trailer. 12,000 is a common steer rating, not a federal limit.</p>
+  </div>
+</details>
+
+<!-- CALIBRATE -->
+<details id="calD">
+  <summary>CALIBRATE FROM A RE-WEIGH <span class="car" aria-hidden="true">&#9656;</span></summary>
+  <div class="dbody">
+    <p class="note" style="margin-bottom:10px">Weigh, slide a known number of holes, and weigh again. The two tandem readings give the kingpin distance exactly, no tape measure needed. Enter the second ticket with the pins where they are now.</p>
+    <div class="srow"><label for="c_t1">Tandems, first weigh</label><input id="c_t1" inputmode="numeric"></div>
+    <div class="srow"><label for="c_t2">Tandems, re-weigh</label><input id="c_t2" inputmode="numeric"></div>
+    <div class="srow"><label for="c_moved">Holes moved<small>Back is positive; forward, put a minus</small></label><input id="c_moved" inputmode="text"></div>
+    <div class="calout" id="calout" aria-live="polite"></div>
+    <button class="solidbtn hidden" id="calApply" type="button">USE THIS DISTANCE</button>
+  </div>
+</details>
+
+<footer>
+  <span id="footVer"></span> &middot; the slide math is exact; the kingpin distance is only as good as your setup<br>
+  Predictions aren't weights. The scale ticket is the only answer that counts.
+</footer>
+
+<!-- lib/*.js are CommonJS so test/*.test.js runs them under plain node with no
+     build step. This shim loads the same unmodified files as classic scripts.
+     Every top-level name in a lib becomes a global — test/libglobals.test.js
+     fails the suite on any collision with this page.
+
+     The ?v= stamp on every lib URL must equal APP_VERSION, so a fresh
+     index.html can never run against a stale cached lib (GitHub Pages serves
+     max-age=600). test/cachebust.test.js enforces it. -->
+<script>var module = { exports: {} };</script>
+<script src="lib/limits.js?v=0.1.0"></script>
+<script>var Limits = module.exports; module = { exports: {} };</script>
+<script src="lib/slide.js?v=0.1.0"></script>
+<script>var Slide = module.exports; module = { exports: {} };</script>
+<script src="lib/format.js?v=0.1.0"></script>
+<script>var Fmt = module.exports; module = { exports: {} };</script>
+
+<script>
+"use strict";
+const APP_VERSION = '0.1.0';
+
+/* ============================== state ==============================
+   Only the rig setup persists. Weights never do: a ticket from yesterday
+   reading LEGAL on today's open is the one screen this app must never show.
+   The states on the load don't persist either; they're per load. */
+const STORE_KEY = 'axlepost.v1.rig';
+const PENDING_CAL_MS = 3 * 60 * 60 * 1000;   // a re-weigh 3 h later isn't the same load
+
+const RIG_DEFAULTS = Object.freeze({
+  hole: 5, holes: 12, spacing: 6, lengthFt: 53,
+  kpToHole1: 436,            // 460 in (38'4") at hole 5
+  spread: 49, share: 0.96,
+  steerLimit: Limits.AXLE_LIMITS.steerDefault,
+  calibrated: false, pendingCal: null
+});
+
+const RIG_RANGES = {
+  holes: [1, 60], spread: [30, 120], sharePct: [80, 100],
+  steerLimit: [8000, 20000], lever: [Slide.SLIDE_CAL_MIN_IN, Slide.SLIDE_CAL_MAX_IN]
+};
+const inRange = (v, [lo, hi]) => Number.isFinite(v) && v >= lo && v <= hi;
+
+function loadRig() {
+  let saved = null;
+  try { saved = JSON.parse(localStorage.getItem(STORE_KEY) || 'null'); } catch (e) { saved = null; }
+  const r = Object.assign({}, RIG_DEFAULTS);
+  if (saved && typeof saved === 'object') {
+    if (inRange(saved.holes, RIG_RANGES.holes)) r.holes = saved.holes;
+    if (Number.isInteger(saved.hole) && saved.hole >= 1 && saved.hole <= r.holes) r.hole = saved.hole;
+    if (saved.spacing === 4 || saved.spacing === 6) r.spacing = saved.spacing;
+    if (saved.lengthFt === 48 || saved.lengthFt === 53) r.lengthFt = saved.lengthFt;
+    if (Number.isFinite(saved.kpToHole1) &&
+        inRange(saved.kpToHole1 + (r.hole - 1) * r.spacing, RIG_RANGES.lever)) r.kpToHole1 = saved.kpToHole1;
+    if (inRange(saved.spread, RIG_RANGES.spread)) r.spread = saved.spread;
+    if (inRange(saved.share * 100, RIG_RANGES.sharePct)) r.share = saved.share;
+    if (inRange(saved.steerLimit, RIG_RANGES.steerLimit)) r.steerLimit = saved.steerLimit;
+    r.calibrated = saved.calibrated === true;
+    const p = saved.pendingCal;
+    if (p && Number.isFinite(p.t1) && Number.isInteger(p.moved) && p.moved !== 0 &&
+        Number.isFinite(p.at) && Date.now() - p.at < PENDING_CAL_MS) r.pendingCal = p;
+  }
+  return r;
+}
+function saveRig() {
+  try { localStorage.setItem(STORE_KEY, JSON.stringify(st.rig)); } catch (e) { /* private mode: session-only */ }
+}
+
+const st = {
+  w: { steer: NaN, drive: NaN, tandem: NaN, gross: NaN },
+  rig: loadRig(),
+  states: new Set()
+};
+
+const $ = id => document.getElementById(id);
+const leverNow = () => Slide.leverAtHole(st.rig, st.rig.hole);
+const limitsNow = () => ({ steer: st.rig.steerLimit, drive: Limits.AXLE_LIMITS.drive,
+                           tandem: Limits.AXLE_LIMITS.tandem, gross: Limits.AXLE_LIMITS.gross });
+const rulesNow = () => [...st.states].map(Limits.kpraRuleFor).filter(Boolean);
+const plural = (n, one, many) => n === 1 ? one : many;
+
+/* Nothing typed by the driver ever reaches innerHTML: every value below is a
+   parsed number or a constant from lib/limits.js. Keep it that way — ticket
+   import will bring PDF text, and that text must go through textContent or
+   an escape, never straight into markup. */
+
+/* ============================== verdict ============================== */
+function analyze() {
+  return Slide.analyzeTicket(st.w, st.rig, limitsNow(), rulesNow());
+}
+
+const GROUPS = [['steer', 'STEER'], ['drive', 'DRIVE'], ['tandem', 'TANDEM'], ['gross', 'GROSS']];
+
+function renderBars(a) {
+  const lim = limitsNow();
+  $('bars').innerHTML = GROUPS.map(([k, name]) => {
+    const w = st.w[k], L = lim[k];
+    const s = a.mode === 'idle' || !a.status ? (Number.isFinite(w) ? Slide.axleStatus(w, L) : 'ok') : a.status[k];
+    const cls = s === 'over' ? 'over' : s === 'tight' ? 'tight' : '';
+    const pct = Number.isFinite(w) ? Math.min(w / L * 86, 100) : 0;
+    const margin = !Number.isFinite(w) ? '—'
+      : w > L ? 'OVER ' + Fmt.fmtLb(w - L) : Fmt.fmtLb(L - w) + ' under';
+    return `<div class="brow"><div class="n">${name}</div>
+      <div class="track"><div class="tick"></div><div class="fill ${cls}" style="width:${pct}%"></div></div>
+      <div class="m ${cls}">${margin}</div></div>`;
+  }).join('');
+}
+
+function stateList(codes) { return codes.join(' + '); }
+
+function renderPill(a) {
+  const p = $('pill');
+  const set = (cls, txt) => { p.className = 'pill ' + cls; p.textContent = txt; };
+  switch (a.mode) {
+    case 'idle':     set('idle', 'ENTER TICKET WEIGHTS'); break;
+    case 'setup':    set('bad', 'CHECK RIG SETUP'); break;
+    case 'legal':    set('legal', 'LEGAL — ROLL'); break;
+    case 'slide':
+      set('fix', a.fixesKpra && !a.fixesAxles
+        ? 'SLIDE FOR ' + stateList(a.here.kpra.filter(k => !k.ok).map(k => k.code)) + ' KINGPIN'
+        : 'SLIDE TO FIX'); break;
+    case 'gross':    set('bad', 'OVER GROSS — NO SLIDE FIX'); break;
+    case 'combined': set('bad', 'DRIVES + TANDEMS OVER — NO SLIDE FIX'); break;
+    case 'steer':    set('bad', 'STEER OVER — FIFTH WHEEL, NOT TANDEMS'); break;
+    case 'kpra':     set('bad', 'NO HOLE MEETS KINGPIN LAW — MOVE FREIGHT'); break;
+    case 'rework':   set('bad', 'NO LEGAL HOLE — MOVE FREIGHT'); break;
+  }
+}
+
+function renderChecked() {
+  const lim = limitsNow();
+  const parts = [`Steer ${Fmt.fmtLb(lim.steer)} (your setting) · drive ${Fmt.fmtLb(lim.drive)} · tandem ${Fmt.fmtLb(lim.tandem)} · gross ${Fmt.fmtLb(lim.gross)}`];
+  const rules = rulesNow();
+  if (!rules.length) parts.push('Kingpin: not checked');
+  else rules.forEach(r => {
+    const where = r.meas === 'rear' ? 'to rearmost axle' : 'to axle-group center';
+    parts.push(Slide.kpraApplies(r, st.rig)
+      ? `${r.code} kingpin ${Fmt.fmtFtIn(r.lim)} ${where}`
+      : `${r.code} kingpin: doesn't apply to a ${st.rig.lengthFt}′ trailer`);
+  });
+  $('checked').innerHTML = 'Checked against: ' + parts.join('<br>');
+}
+
+/* ---- the fix card ---- */
+function baRow(name, before, after, limit) {
+  return `<tr><td>${name}</td><td>${Fmt.fmtLb(before)}</td><td>&#8594;</td>` +
+         `<td class="${after > limit ? 'bad' : 'good'}">${Fmt.fmtPredictedLb(after)}</td></tr>`;
+}
+function kpraLines(from, to) {
+  return to.kpra.map((k, i) => {
+    const pt = k.meas === 'rear' ? 'KP→rear axle' : 'KP→group ctr';
+    return `<div class="kpline">${k.code} ${pt} &nbsp;${Fmt.fmtFtIn(from.kpra[i].value)} &#8594; ` +
+           `<span class="${k.ok ? 'good' : 'bad'}">${Fmt.fmtFtIn(k.value)}</span> &nbsp;&middot;&nbsp; limit ${Fmt.fmtFtIn(k.lim)}</div>`;
+  }).join('');
+}
+function railHTML(positions, target) {
+  let dots = '';
+  for (let h = 1; h <= st.rig.holes; h++) {
+    const p = positions.find(x => x.hole === h);
+    let cls = 'dot ' + (p && p.ok ? 'ok' : 'no');
+    if (h === st.rig.hole) cls = 'dot cur';
+    if (target && h === target.hole) cls = 'dot tgt';
+    dots += `<span class="${cls}" title="hole ${h}"></span>`;
+  }
+  return `<div class="rail" aria-hidden="true">${dots}</div>` +
+         `<div class="raillegend">Rail, front to back &nbsp;&middot;&nbsp; ringed: now${target ? ' &nbsp;&middot;&nbsp; solid: slide here' : ''} &nbsp;&middot;&nbsp; green ring: legal</div>`;
+}
+function moveWords(fromHole, toHole) {
+  const n = Math.abs(toHole - fromHole);
+  if (n === 0) return 'leave the pins where they are';
+  return `slide the tandems ${toHole > fromHole ? 'back' : 'forward'} ${n} ${plural(n, 'hole', 'holes')} to hole ${toHole}`;
+}
+function shiftWords(shift) {
+  if (!shift) {
+    return `<p class="prose">Even an ${Fmt.fmtLb(Slide.SLIDE_SHIFT_MAX_LB)} lb shift doesn't open a legal hole. Check the ticket numbers and the rig setup.</p>`;
+  }
+  const lb = Fmt.fmtLb(Math.ceil(Math.abs(shift.tandemLb) / 100) * 100);
+  const drv = Fmt.fmtLb(Math.round(Math.abs(shift.driveLb) / 10) * 10);
+  const fwd = shift.tandemLb > 0;
+  return `<p class="prose">Shift freight <b>toward the ${fwd ? 'nose' : 'doors'}</b> until the tandems ` +
+         `${fwd ? 'come off' : 'pick up'} about <b>${lb} lb</b> (drives ${fwd ? 'pick up' : 'drop'} about ${drv}), ` +
+         `then ${moveWords(st.rig.hole, shift.hole)}. That's the number to take to the dock, and the one to check on the re-weigh.</p>`;
+}
+
+function renderFix(a) {
+  const card = $('fixcard'), body = $('fixbody'), eb = $('fixeyebrow');
+  if (a.mode === 'idle' || a.mode === 'legal') { card.classList.add('hidden'); return; }
+  card.classList.remove('hidden');
+  const w = st.w;
+
+  if (a.mode === 'slide') {
+    const t = a.target, n = Math.abs(t.hole - st.rig.hole), back = t.hole > st.rig.hole;
+    const rate = Slide.firstHoleTransfer(w.tandem, leverNow(), st.rig.spacing);
+    eb.textContent = 'THE FIX';
+    body.innerHTML =
+      `<div class="directive"><span class="arr">${back ? '&#9654;' : '&#9664;'}</span> SLIDE TANDEMS ${back ? 'BACK' : 'FORWARD'} ${n} ${plural(n, 'HOLE', 'HOLES')}</div>` +
+      `<div class="rate">To hole ${t.hole} &middot; about ${Fmt.fmtLb(Math.round(rate / 10) * 10)} lb a hole at this load, less each hole further back</div>` +
+      `<table class="ba">${baRow('STEER', w.steer, t.steer, limitsNow().steer)}` +
+      `${baRow('DRIVE', w.drive, t.drive, Limits.AXLE_LIMITS.drive)}` +
+      `${baRow('TANDEM', w.tandem, t.tandem, Limits.AXLE_LIMITS.tandem)}</table>` +
+      kpraLines(a.here, t) + railHTML(a.positions, t) +
+      `<p class="predicted">Predicted, not weighed. Re-weigh before you roll.</p>` +
+      `<button class="solidbtn" id="slidDone" type="button">SLID IT — PINS IN HOLE ${t.hole}</button>`;
+    $('slidDone').onclick = () => markSlid(t.hole);
+    return;
+  }
+
+  eb.textContent = a.mode === 'setup' ? 'RIG SETUP' : 'NO FIX ON THE RAIL';
+  if (a.mode === 'setup') {
+    body.innerHTML = `<p class="prose">The rig setup puts the tandems closer than 10 feet to the kingpin at some hole. Check the kingpin distance and the hole count in Rig setup.</p>`;
+    return;
+  }
+  if (a.mode === 'gross') {
+    const gal = Math.ceil(a.excess / 7);
+    body.innerHTML =
+      `<p class="prose">Gross is <b>${Fmt.fmtLb(a.excess)} lb over ${Fmt.fmtLb(Limits.AXLE_LIMITS.gross)}</b>. A slide only moves weight between axles; it can't take any off the truck.</p>` +
+      `<p class="prose">Weight has to come off: freight back to the shipper, or fuel if it's close. Diesel runs about 7 lb a gallon, so this is about ${Fmt.fmtLb(gal)} ${plural(gal, 'gallon', 'gallons')}.</p>`;
+    return;
+  }
+  if (a.mode === 'combined') {
+    const joint = Limits.AXLE_LIMITS.drive + Limits.AXLE_LIMITS.tandem;
+    const room = a.steerRoom >= a.excess
+      ? `Sliding the fifth wheel forward moves weight onto the steers, and you have ${Fmt.fmtLb(a.steerRoom)} lb of steer room.`
+      : `You only have ${Fmt.fmtLb(a.steerRoom)} lb of steer room, so some of it has to come off the truck.`;
+    body.innerHTML =
+      `<p class="prose">Drives and tandems total <b>${Fmt.fmtLb(w.drive + w.tandem)}</b> against a joint ${Fmt.fmtLb(joint)}. Sliding the tandems, or moving freight inside the trailer, only trades weight between those two groups. No hole can fix it.</p>` +
+      `<p class="prose"><b>${Fmt.fmtLb(a.excess)} lb</b> has to go to the steers or off the truck. ${room}</p>`;
+    return;
+  }
+  if (a.mode === 'steer') {
+    const pct = Math.round((1 - st.rig.share) * 100);
+    body.innerHTML =
+      `<p class="prose">Steers are <b>${Fmt.fmtLb(a.excess)} lb over</b> at every hole. A tandem slide sends only about ${pct}% of what it moves to the steers, so it can't fix them.</p>` +
+      `<p class="prose">That's the fifth wheel: slide it back to move weight off the steers onto the drives. If your front axle is rated above ${Fmt.fmtLb(limitsNow().steer)}, set the steer limit in Rig setup.</p>`;
+    return;
+  }
+  if (a.mode === 'kpra') {
+    const bad = stateList([...new Set(a.positions.filter(p => p.axlesOk).flatMap(p => p.kpra.filter(k => !k.ok).map(k => k.code)))]);
+    body.innerHTML =
+      `<p class="prose">Every hole that clears the axles puts you over the <b>${bad}</b> kingpin limit. The pins can't fix this; the freight has to move.</p>` +
+      shiftWords(a.shift) + railHTML(a.positions, null);
+    return;
+  }
+  // rework
+  body.innerHTML =
+    `<p class="prose">Every hole on the rail was checked and none clears every axle. The freight has to move.</p>` +
+    shiftWords(a.shift) + railHTML(a.positions, null);
+}
+
+/* ---- the rig ---- */
+function holeX(h) {
+  const n = st.rig.holes;
+  return n > 1 ? 222 + (h - 1) / (n - 1) * 96 : 270;
+}
+function renderRig(a) {
+  const curX = holeX(st.rig.hole);
+  $('tandems').setAttribute('transform', `translate(${curX},0)`);
+  const colorOf = k => {
+    if (!Number.isFinite(st.w[k])) return '#a3abb6';
+    const s = a.status ? a.status[k] : Slide.axleStatus(st.w[k], limitsNow()[k]);
+    return { ok: '#3dcc7e', tight: '#f0a02e', over: '#f04b4b' }[s];
+  };
+  [['l_steer', 'steer'], ['l_drive', 'drive'], ['l_tandem', 'tandem']].forEach(([id, k]) => {
+    const el = $(id);
+    el.textContent = Number.isFinite(st.w[k]) ? Fmt.fmtLb(st.w[k]) : '—';
+    el.setAttribute('fill', colorOf(k));
+  });
+  $('l_tandem').setAttribute('x', curX);
+  $('dim').setAttribute('x2', curX);
+  $('dimt').setAttribute('x', (88 + curX) / 2);
+  $('dimt').textContent = 'KP→TANDEM ' + Fmt.fmtFtIn(leverNow());
+
+  const ghost = $('ghostT'), arrow = $('slideArrow');
+  if (a.mode === 'slide') {
+    const tx = holeX(a.target.hole), y = 88, dir = Math.sign(tx - curX) || 1;
+    ghost.setAttribute('transform', `translate(${tx},0)`);
+    ghost.classList.add('show');
+    arrow.style.opacity = 1;
+    ['x1', 'x2'].forEach((k, i) => $('sa_l').setAttribute(k, i ? tx : curX));
+    $('sa_h').setAttribute('d', `M ${tx - 6 * dir} ${y - 4} L ${tx} ${y} L ${tx - 6 * dir} ${y + 4}`);
+    $('sa_t').setAttribute('x', (curX + tx) / 2);
+    const n = Math.abs(a.target.hole - st.rig.hole);
+    $('sa_t').textContent = n + ' ' + plural(n, 'HOLE', 'HOLES');
+  } else {
+    ghost.classList.remove('show');
+    arrow.style.opacity = 0;
+  }
+}
+
+/* ---- ticket sum check ---- */
+function renderSum() {
+  const w = st.w, el = $('sumchk');
+  if (!Slide.weightsComplete(w)) { el.textContent = ''; el.className = 'sum'; return; }
+  const sum = w.steer + w.drive + w.tandem, diff = w.gross - sum;
+  if (Math.abs(diff) <= 40) { el.className = 'sum ok'; el.textContent = '✓ axles add up to gross'; }
+  else {
+    el.className = 'sum warn';
+    el.textContent = `axles add to ${Fmt.fmtLb(sum)}, ticket says ${Fmt.fmtLb(w.gross)} — check for a typo`;
+  }
+}
+
+/* ============================== re-weigh calibration ============================== */
+function pendingCalLive() {
+  const p = st.rig.pendingCal;
+  if (p && Date.now() - p.at < PENDING_CAL_MS) return p;
+  if (p) { st.rig.pendingCal = null; saveRig(); }
+  return null;
+}
+
+function markSlid(toHole) {
+  const moved = toHole - st.rig.hole;
+  st.rig.pendingCal = { t1: st.w.tandem, moved, at: Date.now() };
+  st.rig.hole = toHole;
+  saveRig();
+  clearTicket();
+  syncSetupFields();
+  render();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+  $('w_steer').focus({ preventScroll: true });
+}
+
+function renderReweighBanner() {
+  const p = pendingCalLive(), el = $('reweighBanner');
+  if (!p) { el.classList.add('hidden'); return; }
+  el.classList.remove('hidden');
+  const n = Math.abs(p.moved);
+  el.textContent = Slide.weightsComplete(st.w)
+    ? `Re-weigh after sliding ${n} ${plural(n, 'hole', 'holes')} ${p.moved > 0 ? 'back' : 'forward'}. This ticket can calibrate your kingpin distance; it's filled in below under Calibrate.`
+    : `Pins moved to hole ${st.rig.hole}. Re-weigh and enter the new ticket. It'll calibrate your kingpin distance too.`;
+}
+
+// With a pending slide and a complete re-weigh, fill the calibration panel
+// from them, once, and open it. The driver still presses the button.
+let calPrefilledFor = null;
+function maybePrefillCalibration() {
+  const p = pendingCalLive();
+  if (!p || !Slide.weightsComplete(st.w)) return;
+  const key = p.at + ':' + st.w.tandem;
+  if (calPrefilledFor === key) return;
+  calPrefilledFor = key;
+  $('c_t1').value = p.t1;
+  $('c_t2').value = st.w.tandem;
+  $('c_moved').value = p.moved;
+  $('calD').open = true;
+  renderCal();
+}
+
+function readCal() {
+  return Slide.calibrateFromReweigh(Fmt.parseWholeNumber($('c_t1').value), Fmt.parseWholeNumber($('c_t2').value),
+                                    Fmt.parseSignedWholeNumber($('c_moved').value), st.rig.spacing);
+}
+function renderCal() {
+  const r = readCal(), out = $('calout'), btn = $('calApply');
+  btn.classList.add('hidden');
+  if (r.ok) {
+    out.innerHTML = `Kingpin to tandem center, now: <span class="val">${Math.round(r.leverNow)} in</span> (${Fmt.fmtFtIn(r.leverNow)})` +
+                    `<br><span class="note">Applies to hole ${st.rig.hole}, where Rig setup says the pins are now.</span>`;
+    btn.classList.remove('hidden');
+  } else if (r.reason === 'direction') {
+    out.innerHTML = `<span class="err">Those don't add up. Sliding back always lightens the tandems and forward always loads them. Check which way you moved, and the minus sign.</span>`;
+  } else if (r.reason === 'range') {
+    out.innerHTML = `<span class="err">That works out to ${Math.round(r.leverNow)} in, which isn't a trailer. Check the two tandem numbers and the hole count.</span>`;
+  } else {
+    out.textContent = '';
+  }
+}
+function applyCal() {
+  const r = readCal();
+  if (!r.ok) return;
+  st.rig.kpToHole1 = r.leverNow - (st.rig.hole - 1) * st.rig.spacing;
+  st.rig.calibrated = true;
+  st.rig.pendingCal = null;
+  saveRig();
+  syncSetupFields();
+  // The pair is spent. Left in the fields, a later hole change would offer it
+  // again labeled for the new hole: a lever measured at one hole applied to
+  // another, off by the whole slide.
+  ['c_t1', 'c_t2', 'c_moved'].forEach(id => { $(id).value = ''; });
+  $('calApply').classList.add('hidden');
+  $('calout').innerHTML = `<span class="good">Saved.</span> <span class="note">Kingpin to tandem center is ${Math.round(r.leverNow)} in at hole ${st.rig.hole}.</span>`;
+  render();
+}
+
+/* ============================== render ============================== */
+function render() {
+  const a = analyze();
+  renderSum(); renderBars(a); renderPill(a); renderChecked(); renderFix(a); renderRig(a);
+  renderReweighBanner();
+  maybePrefillCalibration();
+  $('calBadge').innerHTML = st.rig.calibrated ? '<span class="badge">CALIBRATED</span>' : '';
+  $('leverConv').textContent = Fmt.fmtFtIn(leverNow());
+}
+
+/* ============================== wiring ============================== */
+function clearTicket() {
+  ['steer', 'drive', 'tandem', 'gross'].forEach(k => { st.w[k] = NaN; $('w_' + k).value = ''; });
+}
+
+['steer', 'drive', 'tandem', 'gross'].forEach((k, i, all) => {
+  const el = $('w_' + k);
+  el.addEventListener('input', () => { st.w[k] = Fmt.parseWholeNumber(el.value); render(); });
+  el.addEventListener('keydown', e => {
+    if (e.key === 'Enter') { e.preventDefault(); const next = all[i + 1]; next ? $('w_' + next).focus() : el.blur(); }
+  });
+});
+$('clearbtn').onclick = () => { clearTicket(); render(); $('w_steer').focus(); };
+
+function syncSetupFields() {
+  const r = st.rig;
+  $('s_hole').value = r.hole;
+  $('s_holes').value = r.holes;
+  $('s_spacing').value = String(r.spacing);
+  $('s_length').value = String(r.lengthFt);
+  $('s_lever').value = Math.round(leverNow());
+  $('s_spread').value = r.spread;
+  $('s_share').value = Math.round(r.share * 100);
+  $('s_steer').value = r.steerLimit;
+  document.querySelectorAll('.srow input').forEach(i => i.classList.remove('invalid'));
+}
+
+// Each setup field: parse, validate, apply. An invalid value is flagged and
+// left out of the model rather than silently clamped.
+function bindSetup(id, apply) {
+  const el = $(id);
+  el.addEventListener('input', () => {
+    const ok = apply(Fmt.parseWholeNumber(el.value));
+    el.classList.toggle('invalid', !ok);
+    if (ok) { saveRig(); render(); }
+  });
+  el.addEventListener('blur', () => { if (!el.classList.contains('invalid')) syncSetupFields(); });
+}
+bindSetup('s_hole', v => {
+  // Changing the hole means the tandems moved: the trailer's geometry
+  // (kpToHole1) stays put and the kingpin distance follows the pins.
+  if (!(Number.isInteger(v) && v >= 1 && v <= st.rig.holes)) return false;
+  if (!inRange(st.rig.kpToHole1 + (v - 1) * st.rig.spacing, RIG_RANGES.lever)) return false;
+  st.rig.hole = v;
+  $('s_lever').value = Math.round(leverNow());
+  if (readCal().ok) renderCal();       // its "applies to hole N" line
+  return true;
+});
+bindSetup('s_holes', v => {
+  if (!inRange(v, RIG_RANGES.holes) || v < st.rig.hole) return false;
+  st.rig.holes = v; return true;
+});
+bindSetup('s_lever', v => {
+  if (!inRange(v, RIG_RANGES.lever)) return false;
+  st.rig.kpToHole1 = v - (st.rig.hole - 1) * st.rig.spacing;
+  st.rig.calibrated = false; return true;
+});
+bindSetup('s_spread', v => { if (!inRange(v, RIG_RANGES.spread)) return false; st.rig.spread = v; return true; });
+bindSetup('s_share', v => { if (!inRange(v, RIG_RANGES.sharePct)) return false; st.rig.share = v / 100; return true; });
+bindSetup('s_steer', v => { if (!inRange(v, RIG_RANGES.steerLimit)) return false; st.rig.steerLimit = v; return true; });
+
+$('s_spacing').addEventListener('change', e => {
+  // Keep the distance the driver measured at this hole; re-derive the rest of the rail.
+  const now = leverNow();
+  st.rig.spacing = parseInt(e.target.value, 10);
+  st.rig.kpToHole1 = now - (st.rig.hole - 1) * st.rig.spacing;
+  saveRig(); render(); renderCal();
+});
+$('s_length').addEventListener('change', e => {
+  st.rig.lengthFt = parseInt(e.target.value, 10);
+  saveRig(); render();
+});
+
+['c_t1', 'c_t2', 'c_moved'].forEach(id => $(id).addEventListener('input', renderCal));
+$('calApply').onclick = applyCal;
+
+// State chips come from lib/limits.js, so adding a verified state is a data change.
+$('stateChips').innerHTML = Object.values(Limits.KPRA_STATES).map(r =>
+  `<button class="chip" type="button" aria-pressed="false" data-code="${r.code}">${r.name}` +
+  `<small>${Fmt.fmtFtIn(r.lim)} ${r.meas === 'rear' ? 'to rearmost axle' : 'to group center'}</small></button>`).join('');
+$('stateChips').addEventListener('click', e => {
+  const b = e.target.closest('.chip');
+  if (!b) return;
+  const code = b.dataset.code, on = !st.states.has(code);
+  on ? st.states.add(code) : st.states.delete(code);
+  b.setAttribute('aria-pressed', String(on));
+  render();
+});
+
+$('ver').textContent = 'v' + APP_VERSION;
+$('footVer').textContent = 'AxlePost v' + APP_VERSION;
+syncSetupFields();
+render();
+
+/* ============================== offline ==============================
+   Same handover as MilesPost: skip the reload on the very first controller
+   (a fresh install has nothing newer to show), reload on every real update. */
+if ('serviceWorker' in navigator) {
+  let hadController = !!navigator.serviceWorker.controller;
+  let reloading = false;
+  navigator.serviceWorker.addEventListener('controllerchange', () => {
+    if (reloading) return;
+    if (!hadController) { hadController = true; return; }
+    reloading = true;
+    location.reload();
+  });
+  window.addEventListener('load', () =>
+    navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {}));
+}
+</script>
+</body>
+</html>

@@ -1,0 +1,602 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>AxlePost — prototype</title>
+<style>
+:root{
+  --asphalt:#101215; --card:#181b20; --edge:#262b33;
+  --ticket:#f2c230; --legal:#3dcc7e; --over:#f04b4b; --tight:#f0a02e;
+  --ink:#eaecef; --mut:#9ba3ae; --dim:#5c636e;
+  --cond:"Avenir Next Condensed","Arial Narrow","Roboto Condensed",system-ui,sans-serif;
+  --mono:ui-monospace,"SF Mono","Roboto Mono",Menlo,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{-webkit-text-size-adjust:100%}
+body{background:var(--asphalt);color:var(--ink);font-family:var(--cond);
+  max-width:430px;margin:0 auto;padding:0 12px 40px;font-size:16px}
+button,input,select{font:inherit;color:inherit}
+:focus-visible{outline:2px solid var(--ticket);outline-offset:2px}
+@media (prefers-reduced-motion:reduce){*{transition:none!important}}
+
+/* header */
+header{display:flex;align-items:baseline;gap:8px;padding:16px 2px 10px}
+.mark{font-size:24px;font-weight:700;letter-spacing:2.5px}
+.mark b{color:var(--ticket);font-weight:700}
+.proto{font-size:10px;letter-spacing:1.5px;color:var(--asphalt);background:var(--ticket);
+  padding:2px 6px;border-radius:3px;font-weight:700}
+.hazard{height:5px;border-radius:3px;margin-bottom:14px;opacity:.55;
+  background:repeating-linear-gradient(45deg,var(--ticket) 0 8px,transparent 8px 16px)}
+
+/* chips */
+.chips{display:flex;gap:6px;overflow-x:auto;padding-bottom:12px;scrollbar-width:none}
+.chips::-webkit-scrollbar{display:none}
+.chip{flex:0 0 auto;background:var(--card);border:1px solid var(--edge);border-radius:20px;
+  padding:6px 12px;font-size:12px;letter-spacing:1px;color:var(--mut);cursor:pointer}
+.chip.on{border-color:var(--ticket);color:var(--ticket)}
+
+/* cards */
+.card{background:var(--card);border:1px solid var(--edge);border-radius:14px;
+  padding:14px;margin-bottom:12px}
+.eyebrow{font-size:11px;letter-spacing:2px;color:var(--mut);margin-bottom:10px;font-weight:600}
+
+/* inputs */
+.wrow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.wrow label{width:72px;font-size:13px;letter-spacing:1.5px;color:var(--mut);font-weight:600}
+.wrow input{flex:1;background:var(--asphalt);border:1px solid var(--edge);border-radius:10px;
+  padding:10px 12px;font-family:var(--mono);font-size:20px;text-align:right;
+  font-variant-numeric:tabular-nums;min-width:0}
+.wrow .u{font-size:11px;color:var(--dim);width:20px}
+.sum{font-family:var(--mono);font-size:12px;text-align:right;margin-top:2px}
+.sum.ok{color:var(--legal)} .sum.warn{color:var(--tight)}
+.importrow{display:flex;gap:8px;margin-bottom:12px}
+.ghostbtn{flex:1;background:none;border:1px dashed var(--dim);border-radius:10px;
+  padding:9px;font-size:13px;letter-spacing:1px;color:var(--mut);cursor:pointer}
+.stubnote{display:none;font-size:12.5px;color:var(--mut);line-height:1.45;
+  border-left:2px solid var(--ticket);padding-left:9px;margin-bottom:12px;font-family:system-ui}
+.stubnote.show{display:block}
+
+/* rig */
+.rigwrap{padding:8px 4px 2px}
+svg{width:100%;height:auto;display:block}
+.rig-line{stroke:#464d58;stroke-width:2;fill:none}
+.rig-fill{fill:#20252c;stroke:#464d58;stroke-width:2}
+.wheel{fill:#14171b;stroke:#525a66;stroke-width:2}
+.wlabel{font-family:var(--mono);font-size:11.5px;font-variant-numeric:tabular-nums}
+.dimline{stroke:var(--ticket);stroke-width:1.25;opacity:.85}
+.dimtxt{font-family:var(--mono);font-size:10.5px;fill:var(--ticket)}
+.slidearrow{stroke:var(--ticket);stroke-width:2;fill:none}
+.slidetxt{font-family:var(--cond);font-size:11px;letter-spacing:1px;fill:var(--ticket)}
+#tandems{transition:transform .5s ease}
+#ghostT{transition:transform .5s ease,opacity .3s;opacity:0}
+#ghostT.show{opacity:.5}
+
+/* verdict bars */
+.brow{display:grid;grid-template-columns:58px 1fr 92px;gap:8px;align-items:center;margin-bottom:9px}
+.brow .n{font-size:12px;letter-spacing:1.5px;color:var(--mut);font-weight:600}
+.track{height:10px;background:var(--asphalt);border-radius:5px;position:relative;overflow:hidden}
+.track .tick{position:absolute;left:86%;top:-1px;bottom:-1px;width:2px;background:#3d4450}
+.fill{height:100%;border-radius:5px;transition:width .4s ease;background:var(--legal)}
+.fill.tight{background:var(--tight)} .fill.over{background:var(--over)}
+.brow .m{font-family:var(--mono);font-size:11.5px;text-align:right;font-variant-numeric:tabular-nums;color:var(--mut)}
+.brow .m.over{color:var(--over)} .brow .m.tight{color:var(--tight)}
+.pill{margin-top:12px;border-radius:10px;padding:12px;text-align:center;font-size:17px;
+  font-weight:700;letter-spacing:2px}
+.pill.legal{background:rgba(61,204,126,.12);color:var(--legal);border:1px solid rgba(61,204,126,.4)}
+.pill.fix{background:rgba(240,160,46,.12);color:var(--tight);border:1px solid rgba(240,160,46,.4)}
+.pill.bad{background:rgba(240,75,75,.12);color:var(--over);border:1px solid rgba(240,75,75,.4)}
+.pill.idle{background:none;color:var(--dim);border:1px dashed var(--edge)}
+
+/* fix card */
+#fixcard{display:none}
+#fixcard.show{display:block}
+.directive{font-size:21px;font-weight:700;letter-spacing:1.5px;margin-bottom:2px}
+.directive .arr{color:var(--ticket)}
+.rate{font-family:var(--mono);font-size:12px;color:var(--mut);margin-bottom:12px}
+.ba{width:100%;border-collapse:collapse;font-family:var(--mono);font-size:14px;
+  font-variant-numeric:tabular-nums;margin-bottom:12px}
+.ba td{padding:5px 0;border-bottom:1px solid var(--edge)}
+.ba td:first-child{font-family:var(--cond);font-size:12px;letter-spacing:1.5px;color:var(--mut)}
+.ba td:nth-child(2){text-align:right;color:var(--mut)}
+.ba td:nth-child(3){text-align:center;color:var(--dim);width:30px}
+.ba td:nth-child(4){text-align:right}
+.ba .good{color:var(--legal)} .ba .bad{color:var(--over)}
+.kpline{font-family:var(--mono);font-size:12px;color:var(--mut);margin-bottom:12px}
+.kpline .bad{color:var(--over)} .kpline .good{color:var(--legal)}
+.rail{display:flex;gap:5px;align-items:center;margin-bottom:6px;flex-wrap:wrap}
+.dot{width:13px;height:13px;border-radius:50%;background:var(--asphalt);border:1.5px solid var(--dim)}
+.dot.ok{border-color:var(--legal)}
+.dot.no{border-color:#5a3036;background:#241a1c}
+.dot.cur{border-color:var(--ticket);box-shadow:0 0 0 2px rgba(242,194,48,.25)}
+.dot.tgt{background:var(--legal);border-color:var(--legal)}
+.raillegend{font-size:10.5px;color:var(--dim);letter-spacing:.5px;margin-bottom:2px}
+.prose{font-size:14px;line-height:1.5;color:var(--ink);font-family:system-ui}
+.prose b{color:var(--ticket)}
+
+/* dest + details */
+.destrow{display:flex;align-items:center;gap:10px}
+.destrow select{flex:1;background:var(--asphalt);border:1px solid var(--edge);border-radius:10px;
+  padding:9px 10px;font-size:14px}
+.finenote{font-size:11px;color:var(--dim);margin-top:7px;font-family:system-ui;line-height:1.4}
+details{background:var(--card);border:1px solid var(--edge);border-radius:14px;
+  margin-bottom:12px;overflow:hidden}
+summary{padding:13px 14px;font-size:12px;letter-spacing:2px;color:var(--mut);font-weight:600;
+  cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center}
+summary::-webkit-details-marker{display:none}
+summary .car{color:var(--dim);transition:transform .2s}
+details[open] summary .car{transform:rotate(90deg)}
+.dbody{padding:0 14px 14px}
+.srow{display:flex;align-items:center;gap:10px;margin-bottom:8px}
+.srow label{flex:1;font-size:13px;color:var(--mut);letter-spacing:.5px}
+.srow input,.srow select{width:104px;background:var(--asphalt);border:1px solid var(--edge);
+  border-radius:8px;padding:8px 10px;font-family:var(--mono);font-size:15px;text-align:right;
+  font-variant-numeric:tabular-nums}
+.srow .conv{font-family:var(--mono);font-size:11px;color:var(--dim);width:52px;text-align:right}
+.calbadge{font-size:10px;letter-spacing:1px;color:var(--legal);border:1px solid var(--legal);
+  border-radius:3px;padding:1px 5px;margin-left:8px}
+.solidbtn{width:100%;background:var(--ticket);color:var(--asphalt);border:none;border-radius:10px;
+  padding:10px;font-weight:700;letter-spacing:1.5px;font-size:14px;cursor:pointer;margin-top:4px}
+.calout{font-family:var(--mono);font-size:14px;margin:10px 0 4px;color:var(--ink)}
+.calout .val{color:var(--ticket);font-size:18px}
+
+footer{font-size:10.5px;color:var(--dim);text-align:center;line-height:1.6;
+  letter-spacing:.5px;font-family:system-ui;padding-top:8px}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="mark">AXLE<b>POST</b></div>
+  <div class="proto">PROTOTYPE</div>
+</header>
+<div class="hazard"></div>
+
+<div class="chips" id="chips"></div>
+
+<!-- TICKET INPUT -->
+<div class="card">
+  <div class="eyebrow">SCALE TICKET</div>
+  <div class="importrow">
+    <button class="ghostbtn" id="importbtn">&#128196;&nbsp; Import ticket PDF</button>
+  </div>
+  <div class="stubnote" id="stubnote">
+    Planned: parse a Weigh&nbsp;My&nbsp;Truck PDF in-browser with pdf.js and fill these fields.
+    Blocked on one check — whether those PDFs carry a selectable text layer. Manual entry is the fallback either way.
+  </div>
+  <div class="wrow"><label>STEER</label><input id="w_s" inputmode="numeric"><span class="u">LB</span></div>
+  <div class="wrow"><label>DRIVE</label><input id="w_d" inputmode="numeric"><span class="u">LB</span></div>
+  <div class="wrow"><label>TRAILER</label><input id="w_t" inputmode="numeric"><span class="u">LB</span></div>
+  <div class="wrow"><label>GROSS</label><input id="w_g" inputmode="numeric"><span class="u">LB</span></div>
+  <div class="sum" id="sumchk"></div>
+</div>
+
+<!-- RIG -->
+<div class="card rigwrap">
+  <svg viewBox="0 0 360 138" aria-label="Rig diagram">
+    <line x1="6" y1="104" x2="354" y2="104" class="rig-line"/>
+    <rect x="70" y="26" width="274" height="52" rx="3" class="rig-fill"/>
+    <line x1="150" y1="78" x2="150" y2="96" class="rig-line"/>
+    <path d="M14 96 V56 h20 l6 -18 h24 v58" class="rig-fill"/>
+    <line x1="88" y1="78" x2="88" y2="92" stroke="#f2c230" stroke-width="2.5"/>
+    <circle cx="34" cy="96" r="9" class="wheel"/>
+    <circle cx="82" cy="96" r="9" class="wheel"/>
+    <circle cx="103" cy="96" r="9" class="wheel"/>
+    <g id="tandems">
+      <circle cx="-10" cy="96" r="9" class="wheel"/>
+      <circle cx="11" cy="96" r="9" class="wheel"/>
+    </g>
+    <g id="ghostT">
+      <circle cx="-10" cy="96" r="9" fill="none" stroke="#f2c230" stroke-width="1.5" stroke-dasharray="3 3"/>
+      <circle cx="11" cy="96" r="9" fill="none" stroke="#f2c230" stroke-width="1.5" stroke-dasharray="3 3"/>
+    </g>
+    <g id="slidearrowg" style="opacity:0">
+      <line id="sa_l" x1="0" y1="88" x2="0" y2="88" class="slidearrow"/>
+      <path id="sa_h" d="" class="slidearrow"/>
+      <text id="sa_t" x="0" y="81" text-anchor="middle" class="slidetxt"></text>
+    </g>
+    <text id="l_s" x="34" y="122" text-anchor="middle" class="wlabel"></text>
+    <text id="l_d" x="92" y="122" text-anchor="middle" class="wlabel"></text>
+    <text id="l_t" x="270" y="122" text-anchor="middle" class="wlabel"></text>
+    <line id="dim" x1="88" y1="133" x2="270" y2="133" class="dimline"/>
+    <text id="dimt" x="180" y="130" text-anchor="middle" class="dimtxt"></text>
+  </svg>
+</div>
+
+<!-- DESTINATION -->
+<div class="card">
+  <div class="destrow">
+    <div class="eyebrow" style="margin:0">DESTINATION</div>
+    <select id="dest">
+      <option value="FED">Federal only — no KPRA check</option>
+      <option value="CA">California — 40' to rearmost axle</option>
+      <option value="FL">Florida — 41' to axle-group center</option>
+    </select>
+  </div>
+  <div class="finenote">CA measures to the rearmost axle, FL to the center of the group — about a 2&nbsp;ft swing on a 49" spread. Both apply to trailers over 48'. Other states pending statutory verification.</div>
+</div>
+
+<!-- VERDICT -->
+<div class="card">
+  <div class="eyebrow">VERDICT</div>
+  <div id="bars"></div>
+  <div class="pill idle" id="pill">ENTER TICKET WEIGHTS</div>
+</div>
+
+<!-- FIX -->
+<div class="card" id="fixcard">
+  <div class="eyebrow" id="fixeyebrow">THE FIX</div>
+  <div id="fixbody"></div>
+</div>
+
+<!-- SETUP -->
+<details id="setupD">
+  <summary>TRAILER SETUP <span id="calbadge"></span><span class="car">&#9656;</span></summary>
+  <div class="dbody">
+    <div class="srow"><label>Current hole (from front)</label><input id="s_hole" inputmode="numeric"></div>
+    <div class="srow"><label>Holes on rail</label><input id="s_holes" inputmode="numeric"></div>
+    <div class="srow"><label>Hole spacing</label>
+      <select id="s_sp"><option value="6">6 in</option><option value="4">4 in</option></select></div>
+    <div class="srow"><label>Kingpin &#8594; tandem center</label><input id="s_L" inputmode="numeric"><span class="conv" id="Lconv"></span></div>
+    <div class="srow"><label>Tandem spread</label><input id="s_spread" inputmode="numeric"><span class="conv">in</span></div>
+    <div class="srow"><label>Kingpin share to drives</label><input id="s_share" inputmode="numeric"><span class="conv">%</span></div>
+    <div class="finenote">KP&#8594;tandem is the one number worth calibrating — see below. Everything else you can read off the trailer.</div>
+  </div>
+</details>
+
+<!-- CALIBRATION -->
+<details>
+  <summary>CALIBRATE FROM A RE-WEIGH <span class="car">&#9656;</span></summary>
+  <div class="dbody">
+    <div class="finenote" style="margin:0 0 10px">
+      Slide a known number of holes between two weighs and the geometry falls out exactly:
+      L = &#916; &#215; T&#8242; &#247; (T &#8722; T&#8242;). No tape measure.
+    </div>
+    <div class="srow"><label>Tandems, first weigh</label><input id="c_t1" inputmode="numeric"></div>
+    <div class="srow"><label>Tandems, re-weigh</label><input id="c_t2" inputmode="numeric"></div>
+    <div class="srow"><label>Holes moved back (&#8722; = fwd)</label><input id="c_h" inputmode="numeric"></div>
+    <div class="calout" id="calout"></div>
+    <button class="solidbtn" id="calapply" style="display:none">APPLY TO TRAILER SETUP</button>
+  </div>
+</details>
+
+<footer>
+  AXLEPOST &#183; v0.1 PROTOTYPE &#183; beam math is exact &#183; KPRA: CA &amp; FL verified to statute, others not loaded<br>
+  settings don't persist in this preview &#183; not a substitute for a certified scale ticket
+</footer>
+
+<script>
+"use strict";
+/* ---------- constants ---------- */
+const LIM = { s:12000, d:34000, t:34000, g:80000 };
+/* per-state KPRA: lim in inches, meas = what the statute measures to.
+   CA: CVC 35401.5(a) — 40' kingpin → REARMOST axle (tandem; 38' single axle), trailers >48'
+   FL: FS 316.515(3)(b)2a — 41' kingpin → CENTER of rear axle group, trailers >48' */
+const KPRA = {
+  FED:null,
+  CA:{ lim:480, meas:"rear" },
+  FL:{ lim:492, meas:"ctr" }
+};
+const TIGHT = 500;                             // "close to limit" band, lb
+
+/* ---------- state (in-memory only) ---------- */
+const st = {
+  w:{ s:NaN, d:NaN, t:NaN, g:NaN },
+  set:{ hole:5, holes:12, sp:6, L:460, spread:49, share:0.96 },
+  dest:"FED",
+  calibrated:false
+};
+
+const SCEN = [
+  { n:"YOUR TICKET",   w:[10740,30600,33000,74340] },
+  { n:"HEAVY TANDEMS", w:[10740,30600,34900,76240] },
+  { n:"NO SLIDE FIX",  w:[10200,34400,34600,79200] },
+  { n:"OVER GROSS",    w:[11200,34800,35400,81400] }
+];
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const fmt = n => Math.round(n).toLocaleString("en-US");
+const ftin = i => { const f=Math.floor(i/12), r=Math.round(i-f*12); return r===12? (f+1)+"'0\"" : f+"'"+r+"\""; };
+
+/* ---------- physics ---------- */
+/* evaluate rig at rail position p given base weights measured at current hole */
+function evalPos(p, base){
+  const s=st.set, D=(p-s.hole)*s.sp, L2=s.L+D;
+  if (L2 < 120) return null;                       // geometrically absurd
+  const t = base.t * s.L / L2;                     // T' = T·L/(L+Δ)
+  const dT = base.t - t;                           // + when sliding back
+  const d = base.d + dT*s.share;
+  const sr = base.s + dT*(1-s.share);
+  const K = KPRA[st.dest] || null;
+  const kpR = L2 + s.spread/2;                     // to rearmost axle
+  const kp = (K && K.meas==="ctr") ? L2 : kpR;     // value the destination's law measures
+  const axOK = sr<=LIM.s && d<=LIM.d && t<=LIM.t;
+  const kpOK = !K || kp<=K.lim;
+  return { p, D, L2, s:sr, d, t, kp, axOK, kpOK, ok:axOK&&kpOK };
+}
+function searchPositions(base){
+  const out=[];
+  for(let p=1;p<=st.set.holes;p++){ const e=evalPos(p,base); if(e) out.push(e); }
+  return out;
+}
+function bestPosition(list){
+  const legal=list.filter(e=>e.ok && e.p!==st.set.hole);
+  if(!legal.length) return null;
+  legal.sort((a,b)=>{
+    const ma=Math.abs(a.p-st.set.hole), mb=Math.abs(b.p-st.set.hole);
+    if(ma!==mb) return ma-mb;
+    const marg=e=>Math.min(LIM.s-e.s,LIM.d-e.d,LIM.t-e.t);
+    return marg(b)-marg(a);
+  });
+  return legal[0];
+}
+/* how many pounds must shift toward the nose before some position goes legal */
+function reworkAdvisor(base){
+  for(let x=100;x<=6000;x+=100){
+    const b2={ s:base.s+0.04*x, d:base.d+0.96*x, t:base.t-x };
+    const list=searchPositions(b2);
+    if(list.some(e=>e.ok)) return { x };
+  }
+  return null;
+}
+
+/* ---------- analysis ---------- */
+function axStatus(w,lim){ return w>lim ? "over" : (lim-w<=TIGHT ? "tight" : "ok"); }
+
+function analyze(){
+  const w=st.w;
+  if([w.s,w.d,w.t,w.g].some(v=>!Number.isFinite(v)||v<=0)) return { mode:"idle" };
+  const here=evalPos(st.set.hole,w);               // KPRA at current position
+  const stat={ s:axStatus(w.s,LIM.s), d:axStatus(w.d,LIM.d), t:axStatus(w.t,LIM.t), g:axStatus(w.g,LIM.g) };
+  const K=KPRA[st.dest]||null;
+  const kpBad = !!K && here.kp>K.lim;
+
+  if (w.g>LIM.g) return { mode:"gross", stat, here, excess:w.g-LIM.g };
+
+  const axleTrouble = stat.d==="over"||stat.t==="over";
+  if (!axleTrouble && !kpBad){
+    if (stat.s==="over") return { mode:"steer", stat, here };
+    return { mode:"legal", stat, here };
+  }
+
+  /* combined-limit impossibility: a slide only leaks ~4% of ΔT to the steers */
+  if (w.d+w.t > LIM.d+LIM.t){
+    return { mode:"combined", stat, here, excess:w.d+w.t-(LIM.d+LIM.t) };
+  }
+  const list=searchPositions(w);
+  const best=bestPosition(list);
+  if (best) return { mode:"slide", stat, here, best, list, kpBad };
+  const adv=reworkAdvisor(w);
+  return { mode:"rework", stat, here, list, adv, kpBad };
+}
+
+/* ---------- render: bars ---------- */
+const AXES=[["s","STEER"],["d","DRIVE"],["t","TANDEM"],["g","GROSS"]];
+function renderBars(a){
+  const el=$("bars"); el.innerHTML="";
+  AXES.forEach(([k,name])=>{
+    const w=st.w[k], lim=LIM[k];
+    const row=document.createElement("div"); row.className="brow";
+    const stc = a.mode==="idle" ? "ok" : a.stat[k];
+    const pct = Number.isFinite(w) ? Math.min(w/lim*86,100) : 0;
+    const margin = Number.isFinite(w)
+      ? (w>lim ? "OVER "+fmt(w-lim) : fmt(lim-w)+" under") : "\u2014";
+    row.innerHTML =
+      `<div class="n">${name}</div>
+       <div class="track"><div class="tick"></div>
+         <div class="fill ${stc==="over"?"over":stc==="tight"?"tight":""}" style="width:${pct}%"></div></div>
+       <div class="m ${stc==="over"?"over":stc==="tight"?"tight":""}">${margin}</div>`;
+    el.appendChild(row);
+  });
+}
+
+/* ---------- render: pill ---------- */
+function renderPill(a){
+  const p=$("pill");
+  const set=(cls,txt)=>{ p.className="pill "+cls; p.textContent=txt; };
+  switch(a.mode){
+    case "idle":    set("idle","ENTER TICKET WEIGHTS"); break;
+    case "legal":   set("legal","LEGAL \u2014 ROLL"); break;
+    case "slide":   set("fix", a.kpBad&&!(a.stat.d==="over"||a.stat.t==="over")
+                        ? "SLIDE FOR "+st.dest+" KPRA" : "SLIDE TO FIX"); break;
+    case "gross":   set("bad","OVER GROSS \u2014 REMOVE "+fmt(a.excess)+" LB"); break;
+    case "combined":set("bad","NO SLIDE FIX \u2014 SHED OR SHIFT WEIGHT"); break;
+    case "rework":  set("bad","NO LEGAL SLIDE \u2014 REWORK FREIGHT"); break;
+    case "steer":   set("bad","STEER OVER \u2014 SLIDE WON'T FIX"); break;
+  }
+}
+
+/* ---------- render: fix card ---------- */
+function baRow(name,b,aft,lim){
+  const cls=aft>lim?"bad":"good";
+  return `<tr><td>${name}</td><td>${fmt(b)}</td><td>&#8594;</td><td class="${cls}">${fmt(aft)}</td></tr>`;
+}
+function railHTML(list,best){
+  let dots="";
+  for(let p=1;p<=st.set.holes;p++){
+    const e=list.find(x=>x.p===p);
+    let cls="dot"+(e&&e.ok?" ok":" no");
+    if(p===st.set.hole) cls="dot cur";
+    if(best&&p===best.p) cls="dot tgt";
+    dots+=`<span class="${cls}" title="hole ${p}"></span>`;
+  }
+  return `<div class="raillegend">RAIL &#183; front &#8594; rear &nbsp;&#9679; target &nbsp;&#9678; current</div>
+          <div class="rail">${dots}</div>`;
+}
+function renderFix(a){
+  const card=$("fixcard"), body=$("fixbody"), eb=$("fixeyebrow");
+  if(a.mode==="idle"||a.mode==="legal"){ card.className="card"; return; }
+  card.className="card show";
+  const w=st.w, K=KPRA[st.dest]||null;
+  const kpl=(K&&K.meas==="ctr")?"KP&#8594;grp ctr":"KP&#8594;rear";
+
+  if(a.mode==="slide"){
+    eb.textContent="THE FIX";
+    const b=a.best, holes=Math.abs(b.p-st.set.hole), back=b.p>st.set.hole;
+    const rate=Math.round(w.t*st.set.sp/st.set.L);
+    const kp= K
+      ? `<div class="kpline">${kpl} &nbsp;${ftin(a.here.kp)} &#8594; <span class="${b.kpOK?"good":"bad"}">${ftin(b.kp)}</span> &nbsp;&#183;&nbsp; ${st.dest} limit ${ftin(K.lim)}</div>`
+      : `<div class="kpline">KP&#8594;rear &nbsp;${ftin(a.here.kp)} &#8594; ${ftin(b.kp)} &nbsp;&#183;&nbsp; no KPRA check</div>`;
+    body.innerHTML =
+      `<div class="directive"><span class="arr">${back?"&#9654;":"&#9664;"}</span> SLIDE TANDEMS ${back?"BACK":"FORWARD"} ${holes} HOLE${holes>1?"S":""}</div>
+       <div class="rate">&#8776;${fmt(rate)} lb per hole at this load &#183; rate decays as you slide back</div>
+       <table class="ba">
+         ${baRow("STEER",w.s,b.s,LIM.s)}
+         ${baRow("DRIVE",w.d,b.d,LIM.d)}
+         ${baRow("TANDEM",w.t,b.t,LIM.t)}
+       </table>
+       ${kp}
+       ${railHTML(a.list,b)}`;
+    return;
+  }
+  if(a.mode==="gross"){
+    eb.textContent="NO FIX ON THE RAIL";
+    body.innerHTML =
+      `<div class="prose">Gross is <b>${fmt(a.excess)} lb over 80,000</b>. Sliding tandems only redistributes weight
+       between axle groups &#8212; it can't shed a pound. Weight has to come off the truck: fuel level,
+       or freight back to the shipper.</div>`;
+    return;
+  }
+  if(a.mode==="combined"){
+    eb.textContent="NO FIX ON THE RAIL";
+    body.innerHTML =
+      `<div class="prose">Drives + tandems total <b>${fmt(w.d+w.t)} lb</b> against a combined limit of
+       ${fmt(LIM.d+LIM.t)} (34k + 34k). A slide just trades between the two groups, so no hole position
+       can work. <b>${fmt(a.excess)} lb</b> has to move to the steers (fifth wheel) or off the truck.</div>`;
+    return;
+  }
+  if(a.mode==="rework"){
+    eb.textContent="NO FIX ON THE RAIL";
+    const reason = a.kpBad
+      ? "every position that clears the axles breaks the "+st.dest+" kingpin limit"
+      : "sliding back overloads the drives before the tandems come legal &#8212; this rail's hole spacing steps right over the legal window";
+    const adv = a.adv
+      ? `<div class="prose" style="margin-top:8px">Move <b>&#8776;${fmt(a.adv.x)} lb toward the nose</b> and a legal slide position opens up. That's the number to bring to the dock.</div>`
+      : "";
+    body.innerHTML =
+      `<div class="prose">Every hole was checked &#8212; ${reason}. Freight has to be re-worked inside the trailer.</div>
+       ${adv}
+       <div style="margin-top:10px">${railHTML(a.list,null)}</div>`;
+    return;
+  }
+  if(a.mode==="steer"){
+    eb.textContent="WRONG LEVER";
+    body.innerHTML =
+      `<div class="prose">A tandem slide sends only ~${Math.round((1-st.set.share)*100)}% of the transfer to the steers &#8212;
+       it can't meaningfully fix a heavy steer axle. That's a <b>fifth wheel</b> adjustment, or fuel level.</div>`;
+  }
+}
+
+/* ---------- render: rig ---------- */
+function holeX(h){ return 232 + (h-1)*7.6; }        /* hole 1..12 → px center */
+function renderRig(a){
+  const w=st.w, curX=holeX(st.set.hole);
+  $("tandems").setAttribute("transform",`translate(${curX},0)`);
+  const col=k=> a.mode==="idle" ? "#9ba3ae" :
+    ({ok:"#3dcc7e",tight:"#f0a02e",over:"#f04b4b"})[a.stat[k]];
+  const put=(id,k)=>{ const e=$(id); e.textContent=Number.isFinite(w[k])?fmt(w[k]):"\u2014"; e.setAttribute("fill",col(k)); };
+  put("l_s","s"); put("l_d","d");
+  const lt=$("l_t"); lt.textContent=Number.isFinite(w.t)?fmt(w.t):"\u2014";
+  lt.setAttribute("fill", a.mode==="idle"?"#9ba3ae":col("t"));
+  lt.setAttribute("x", curX+0.5);
+  $("dim").setAttribute("x2", curX+0.5);
+  const dt=$("dimt"); dt.setAttribute("x",(88+curX)/2);
+  dt.textContent="KP\u2192TDM "+ftin(st.set.L);
+  const g=$("ghostT"), ag=$("slidearrowg");
+  if(a.mode==="slide"){
+    const tx=holeX(a.best.p);
+    g.setAttribute("transform",`translate(${tx},0)`); g.classList.add("show");
+    ag.style.opacity=1;
+    const y=88, x1=curX+0.5, x2=tx+0.5, dir=Math.sign(x2-x1)||1;
+    $("sa_l").setAttribute("x1",x1); $("sa_l").setAttribute("x2",x2);
+    $("sa_l").setAttribute("y1",y);  $("sa_l").setAttribute("y2",y);
+    $("sa_h").setAttribute("d",`M ${x2-6*dir} ${y-4} L ${x2} ${y} L ${x2-6*dir} ${y+4}`);
+    const t_=$("sa_t"); t_.setAttribute("x",(x1+x2)/2);
+    const n=Math.abs(a.best.p-st.set.hole);
+    t_.textContent=n+(n>1?" HOLES":" HOLE");
+  } else { g.classList.remove("show"); ag.style.opacity=0; }
+}
+
+/* ---------- render: sum check ---------- */
+function renderSum(){
+  const w=st.w, el=$("sumchk");
+  if([w.s,w.d,w.t,w.g].some(v=>!Number.isFinite(v))){ el.textContent=""; return; }
+  const sum=w.s+w.d+w.t, diff=w.g-sum;
+  if(Math.abs(diff)<=40){ el.className="sum ok"; el.textContent="\u2713 axles match gross"; }
+  else { el.className="sum warn"; el.textContent="axles sum "+fmt(sum)+" \u00b7 ticket gross "+fmt(w.g)+" (\u0394 "+fmt(Math.abs(diff))+")"; }
+}
+
+/* ---------- master render ---------- */
+function render(){
+  const a=analyze();
+  renderSum(); renderBars(a); renderPill(a); renderFix(a); renderRig(a);
+  $("calbadge").innerHTML = st.calibrated ? '<span class="calbadge">CALIBRATED</span>' : "";
+  $("Lconv").textContent = ftin(st.set.L);
+}
+
+/* ---------- wiring ---------- */
+function bindWeight(id,key){
+  $(id).addEventListener("input",e=>{ st.w[key]=parseInt(e.target.value.replace(/[^0-9]/g,""),10); render(); });
+}
+bindWeight("w_s","s"); bindWeight("w_d","d"); bindWeight("w_t","t"); bindWeight("w_g","g");
+
+function bindSet(id,key,parse){
+  $(id).addEventListener("input",e=>{
+    const v=parse(e.target.value);
+    if(Number.isFinite(v)&&v>0){ st.set[key]=v; if(key==="L") st.calibrated=false; render(); }
+  });
+}
+bindSet("s_hole","hole",v=>parseInt(v,10));
+bindSet("s_holes","holes",v=>parseInt(v,10));
+bindSet("s_L","L",v=>parseInt(v,10));
+bindSet("s_spread","spread",v=>parseInt(v,10));
+$("s_sp").addEventListener("change",e=>{ st.set.sp=parseInt(e.target.value,10); render(); });
+$("s_share").addEventListener("input",e=>{
+  const v=parseInt(e.target.value,10);
+  if(Number.isFinite(v)&&v>=80&&v<=100){ st.set.share=v/100; render(); }
+});
+$("dest").addEventListener("change",e=>{ st.dest=e.target.value; render(); });
+$("importbtn").addEventListener("click",()=>$("stubnote").classList.toggle("show"));
+
+/* calibration */
+function calc(){
+  const t1=parseInt($("c_t1").value,10), t2=parseInt($("c_t2").value,10), h=parseInt($("c_h").value,10);
+  const out=$("calout"), btn=$("calapply");
+  if(![t1,t2,h].every(Number.isFinite)||h===0||t1===t2){ out.textContent=""; btn.style.display="none"; return null; }
+  const D=h*st.set.sp, L=D*t2/(t1-t2);
+  if(!(L>120&&L<720)){ out.innerHTML="result "+Math.round(L)+" in \u2014 outside a sane range, check inputs"; btn.style.display="none"; return null; }
+  out.innerHTML=`KP&#8594;tandem = <span class="val">${Math.round(L)} in</span> &nbsp;(${ftin(L)}) &nbsp;&#183;&nbsp; measured at first-weigh position`;
+  btn.style.display="block"; return Math.round(L);
+}
+["c_t1","c_t2","c_h"].forEach(id=>$(id).addEventListener("input",calc));
+$("calapply").addEventListener("click",()=>{
+  const L=calc(); if(L===null) return;
+  st.set.L=L; st.calibrated=true; syncSetup(); render();
+  $("setupD").open=true;
+});
+
+/* chips */
+const chipsEl=$("chips");
+SCEN.forEach(sc=>{
+  const b=document.createElement("button"); b.className="chip"; b.textContent=sc.n;
+  b.addEventListener("click",()=>{
+    [...chipsEl.children].forEach(c=>c.classList.remove("on")); b.classList.add("on");
+    ["s","d","t","g"].forEach((k,j)=>{ st.w[k]=sc.w[j]; $("w_"+k).value=sc.w[j]; });
+    render();
+  });
+  chipsEl.appendChild(b);
+});
+
+function syncSetup(){
+  $("s_hole").value=st.set.hole; $("s_holes").value=st.set.holes;
+  $("s_sp").value=String(st.set.sp); $("s_L").value=st.set.L;
+  $("s_spread").value=st.set.spread; $("s_share").value=Math.round(st.set.share*100);
+}
+
+/* boot: load the real ticket */
+syncSetup();
+chipsEl.children[0].click();
+</script>
+</body>
+</html>
