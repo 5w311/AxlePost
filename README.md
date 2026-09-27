@@ -223,6 +223,12 @@ identifiers and no file names. Technical detail goes below it.
 
 Newest first.
 
+### v0.1.1
+A cleaner truck in the rig diagram: a proper tractor with its frame, fuel tank
+and stack, wheels with hubs, and a trailer with landing gear, a rear bumper and
+the slider rail with a dot for every hole. The tandems no longer sweep across
+the tractor every time the app opens.
+
 ### v0.1.0
 First release, from the approved prototype. Ticket entry with a sum check,
 per-group verdict bars, and a slide answer with predicted weights. Separate
