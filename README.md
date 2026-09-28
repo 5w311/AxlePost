@@ -223,6 +223,11 @@ identifiers and no file names. Technical detail goes below it.
 
 Newest first.
 
+### v0.1.2
+New app icon: the slider rail and a pair of tandem wheels in ticket yellow. It's
+on the home screen, in the browser tab, and next to the name at the top of the
+app.
+
 ### v0.1.1
 A cleaner truck in the rig diagram: a proper tractor with its frame, fuel tank
 and stack, wheels with hubs, and a trailer with landing gear, a rear bumper and

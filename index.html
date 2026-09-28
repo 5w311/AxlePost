@@ -8,6 +8,7 @@
 <meta name="color-scheme" content="dark">
 <meta name="description" content="Scale ticket in, slide answer out. Axle weights, tandem slide, and kingpin limits. Works offline.">
 <link rel="manifest" href="./manifest.webmanifest">
+<link rel="icon" type="image/png" sizes="192x192" href="./icon-192.png">
 <link rel="apple-touch-icon" href="./apple-touch-icon.png">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -36,8 +37,9 @@ button{cursor:pointer}
 :focus-visible{outline:2px solid var(--ticket);outline-offset:2px}
 @media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
 
-header{display:flex;align-items:baseline;justify-content:space-between;padding:18px 2px 10px}
-.mark{font-size:25px;font-weight:700;letter-spacing:2.5px}
+header{display:flex;align-items:center;justify-content:space-between;padding:18px 2px 10px}
+.mark{font-size:25px;font-weight:700;letter-spacing:2.5px;display:flex;align-items:center;gap:10px}
+.mark img{width:32px;height:32px;border-radius:7px;flex:none}
 .mark b{color:var(--ticket);font-weight:700}
 .ver{font-family:var(--mono);font-size:12px;color:var(--mut)}
 .hazard{height:5px;border-radius:3px;margin-bottom:14px;opacity:.55;
@@ -163,7 +165,7 @@ footer{font-family:var(--text);font-size:12px;color:var(--mut);text-align:center
 <body>
 
 <header>
-  <div class="mark">AXLE<b>POST</b></div>
+  <div class="mark"><img src="./icon-192.png" alt="" width="32" height="32"><span>AXLE<b>POST</b></span></div>
   <div class="ver" id="ver"></div>
 </header>
 <div class="hazard"></div>
@@ -299,16 +301,16 @@ footer{font-family:var(--text);font-size:12px;color:var(--mut);text-align:center
      index.html can never run against a stale cached lib (GitHub Pages serves
      max-age=600). test/cachebust.test.js enforces it. -->
 <script>var module = { exports: {} };</script>
-<script src="lib/limits.js?v=0.1.1"></script>
+<script src="lib/limits.js?v=0.1.2"></script>
 <script>var Limits = module.exports; module = { exports: {} };</script>
-<script src="lib/slide.js?v=0.1.1"></script>
+<script src="lib/slide.js?v=0.1.2"></script>
 <script>var Slide = module.exports; module = { exports: {} };</script>
-<script src="lib/format.js?v=0.1.1"></script>
+<script src="lib/format.js?v=0.1.2"></script>
 <script>var Fmt = module.exports; module = { exports: {} };</script>
 
 <script>
 "use strict";
-const APP_VERSION = '0.1.1';
+const APP_VERSION = '0.1.2';
 
 /* ============================== state ==============================
    Only the rig setup persists. Weights never do: a ticket from yesterday
