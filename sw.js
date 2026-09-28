@@ -1,7 +1,7 @@
 // Build marker. It must name APP_VERSION (test/sw.test.js checks), and it must
 // change on every deploy, or installed phones decide they're already current
 // and quietly keep the old build.
-const CACHE = "axlepost-v0.1.1";
+const CACHE = "axlepost-v0.1.2";
 
 // Everything the app needs, so it opens and works at a scale in a dead zone.
 // The ?v= URLs are the exact ones index.html requests; caching the bare path
@@ -9,9 +9,9 @@ const CACHE = "axlepost-v0.1.1";
 const ASSETS = [
   "./",
   "./index.html",
-  "./lib/limits.js?v=0.1.1",
-  "./lib/slide.js?v=0.1.1",
-  "./lib/format.js?v=0.1.1",
+  "./lib/limits.js?v=0.1.2",
+  "./lib/slide.js?v=0.1.2",
+  "./lib/format.js?v=0.1.2",
   "./manifest.webmanifest",
   "./icon-192.png",
   "./icon-512.png",
